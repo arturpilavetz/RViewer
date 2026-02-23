@@ -59,8 +59,9 @@ final class UserInfoVC: UIViewController {
 
 	private let copyToastView: UIView = {
 		let view = UIView()
-		view.backgroundColor = UIColor.black.withAlphaComponent(0.82)
+		view.backgroundColor = .tertiarySystemBackground
 		view.layer.cornerRadius = 18
+		view.layer.borderWidth = 1
 		view.alpha = 0
 		return view
 	}()
@@ -68,7 +69,7 @@ final class UserInfoVC: UIViewController {
 	private let copyToastLabel: UILabel = {
 		let label = UILabel()
 		label.text = "Text copied"
-		label.textColor = .white
+		label.textColor = .label
 		label.font = .systemFont(ofSize: 13, weight: .semibold)
 		label.textAlignment = .center
 		return label
@@ -91,10 +92,16 @@ final class UserInfoVC: UIViewController {
 
 		setUpConstraints()
 		loadData()
+		updateColors()
 	}
 
 	deinit {
 		imageTask?.cancel()
+	}
+
+	override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+		super.traitCollectionDidChange(previousTraitCollection)
+		updateColors()
 	}
 
 	private func setUpConstraints() {
@@ -182,7 +189,7 @@ final class UserInfoVC: UIViewController {
 		container.backgroundColor = .secondarySystemBackground
 		container.layer.cornerRadius = 10
 		container.layer.borderWidth = 1
-		container.layer.borderColor = UIColor.systemGray5.cgColor
+		container.layer.borderColor = UIColor.separator.cgColor
 		container.isUserInteractionEnabled = true
 
 		let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleRowLongPress(_:)))
@@ -211,6 +218,13 @@ final class UserInfoVC: UIViewController {
 		}
 
 		stackView.addArrangedSubview(container)
+	}
+
+	private func updateColors() {
+		copyToastView.layer.borderColor = UIColor.separator.cgColor
+		for arrangedSubview in stackView.arrangedSubviews {
+			arrangedSubview.layer.borderColor = UIColor.separator.cgColor
+		}
 	}
 
 	@objc private func handleRowLongPress(_ recognizer: UILongPressGestureRecognizer) {

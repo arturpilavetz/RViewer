@@ -13,7 +13,6 @@ final class TopUserCell: UITableViewCell {
 		let view = UIView()
 		view.backgroundColor = .secondarySystemBackground
 		view.layer.cornerRadius = 12
-		view.layer.borderColor = UIColor.systemGray5.cgColor
 		view.layer.borderWidth = 1
 		return view
 	}()
@@ -63,6 +62,7 @@ final class TopUserCell: UITableViewCell {
 		super.init(style: style, reuseIdentifier: reuseIdentifier)
 		setConstraints()
 		setUpView()
+		updateColors()
 	}
 
 	required init?(coder: NSCoder) {
@@ -80,9 +80,18 @@ final class TopUserCell: UITableViewCell {
 		badgesLabel.attributedText = nil
 	}
 
+	override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+		super.traitCollectionDidChange(previousTraitCollection)
+		updateColors()
+	}
+
 	private func setUpView() {
 		backgroundColor = .clear
 		selectionStyle = .none
+	}
+
+	private func updateColors() {
+		cardView.layer.borderColor = UIColor.separator.cgColor
 	}
 	
 	private func setConstraints() {

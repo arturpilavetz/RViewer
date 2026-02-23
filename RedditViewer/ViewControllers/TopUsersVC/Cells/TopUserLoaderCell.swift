@@ -41,8 +41,7 @@ final class TopUserLoaderCell: UITableViewCell {
 		
 		activityIndicatorView.snp.makeConstraints { make in
 			make.size.equalTo(30)
-			make.centerY.equalToSuperview()
-			make.centerX.equalToSuperview()
+			make.center.equalToSuperview()
 		}
 	}
 	
