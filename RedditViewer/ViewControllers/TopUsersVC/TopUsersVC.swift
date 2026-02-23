@@ -12,7 +12,8 @@ class TopUsersVC: UIViewController {
 	private let tableView: UITableView = {
 		let tableView = UITableView()
 		[
-			TopUserCell.self
+			TopUserCell.self,
+			TopUserLoaderCell.self
 		]
 			.forEach { tableView.registerClass($0) }
 		tableView.separatorStyle = .none
@@ -22,8 +23,8 @@ class TopUsersVC: UIViewController {
 	}()
 
 	private let refreshControl = UIRefreshControl()
-	private let paginationIndicator = UIActivityIndicatorView(style: .medium)
 	private let viewModel = TopUsersViewModel()
+	private var isPaginating = false
 
 	override func viewDidLoad() {
 		super.viewDidLoad()
@@ -36,10 +37,6 @@ class TopUsersVC: UIViewController {
 		tableView.refreshControl = refreshControl
 		refreshControl.addTarget(self, action: #selector(refreshPulled), for: .valueChanged)
 
-		paginationIndicator.hidesWhenStopped = true
-		paginationIndicator.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: 44)
-		tableView.tableFooterView = paginationIndicator
-
 		viewModel.onDataDidUpdate = { [weak self] in
 			self?.tableView.reloadData()
 		}
@@ -48,12 +45,15 @@ class TopUsersVC: UIViewController {
 		}
 		viewModel.onPaginationStateChanged = { [weak self] isLoading in
 			guard let self else { return }
-			if isLoading {
-				self.paginationIndicator.startAnimating()
+			guard self.isPaginating != isLoading else { return }
+			self.isPaginating = isLoading
+
+			let loaderIndexPath = IndexPath(row: self.viewModel.numberOfRows(), section: 0)
+			if self.tableView.numberOfRows(inSection: 0) > loaderIndexPath.row {
+				self.tableView.reloadRows(at: [loaderIndexPath], with: .none)
 			} else {
-				self.paginationIndicator.stopAnimating()
+				self.tableView.reloadData()
 			}
-			self.tableView.tableFooterView?.isHidden = !isLoading
 		}
 
 		setUpConstraints()
@@ -74,18 +74,34 @@ class TopUsersVC: UIViewController {
 
 extension TopUsersVC: UITableViewDataSource, UITableViewDelegate {
 	func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-		viewModel.numberOfRows()
+		viewModel.numberOfRows() + 1
 	}
 
 	func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-		viewModel.cell(for: indexPath, tableView: tableView)
+		if indexPath.row == viewModel.numberOfRows() {
+			let cell = tableView.dequeueReusableCell(TopUserLoaderCell.self, for: indexPath)
+			cell.setLoading(isPaginating)
+			return cell
+		}
+		return viewModel.cell(for: indexPath, tableView: tableView)
 	}
 
 	func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+		if indexPath.row == viewModel.numberOfRows() {
+			return 50
+		}
 		return UITableView.automaticDimension
 	}
 
+	func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+		guard indexPath.row < viewModel.numberOfRows() else { return }
+		guard let user = viewModel.user(at: indexPath) else { return }
+		let userInfoVC = UserInfoVC(user: user)
+		navigationController?.pushViewController(userInfoVC, animated: true)
+	}
+
 	func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+		guard cell as? TopUserCell != nil else { return }
 		viewModel.loadNextPageIfNeeded(currentIndex: indexPath.row)
 	}
 }

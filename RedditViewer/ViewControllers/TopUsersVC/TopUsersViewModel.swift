@@ -38,6 +38,11 @@ final class TopUsersViewModel {
 		topUsers.count
 	}
 
+	func user(at indexPath: IndexPath) -> UserItemData? {
+		guard indexPath.row >= 0, indexPath.row < topUsers.count else { return nil }
+		return topUsers[indexPath.row]
+	}
+
 	func refresh() {
 		getTopUsers(reset: true)
 	}
@@ -80,10 +85,10 @@ final class TopUsersViewModel {
 					hasMore = response.hasMore ?? false
 					isLoading = false
 
-					print("*** \(response.quotaRemaining)")
+					print("*** \(response.quotaRemaining ?? 0)")
+					onPaginationStateChanged?(false)
 					onDataDidUpdate?()
 					onRefreshEnded?()
-					onPaginationStateChanged?(false)
 				}
 			} catch {
 				await MainActor.run {
