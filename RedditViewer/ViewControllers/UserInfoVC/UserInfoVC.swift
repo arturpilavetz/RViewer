@@ -56,8 +56,15 @@ final class UserInfoVC: UIViewController {
 	private var toastBottomConstraint: Constraint?
 	private var toastHideTask: DispatchWorkItem?
 	private var loadedAvatarImage: UIImage?
+	private var isSavedUser = false
 
 	private let user: UserItemData
+	private lazy var saveButtonItem = UIBarButtonItem(
+		image: nil,
+		style: .plain,
+		target: self,
+		action: #selector(toggleSavedUser)
+	)
 
 	private let copyToastView: UIView = {
 		let view = UIView()
@@ -91,10 +98,12 @@ final class UserInfoVC: UIViewController {
 
 		view.backgroundColor = .systemBackground
 		title = "User Info"
+		navigationItem.rightBarButtonItem = saveButtonItem
 
 		setUpConstraints()
 		setUpGestures()
 		loadData()
+		refreshSavedState()
 		updateColors()
 	}
 
@@ -194,6 +203,17 @@ final class UserInfoVC: UIViewController {
 		loadImage(urlString: user.profileImage)
 	}
 
+	private func refreshSavedState() {
+		isSavedUser = SavedUsersStore.shared.isSaved(user: user)
+		updateSaveButtonAppearance()
+	}
+
+	private func updateSaveButtonAppearance() {
+		let imageName = isSavedUser ? "bookmark.fill" : "bookmark"
+		saveButtonItem.image = UIImage(systemName: imageName)
+		saveButtonItem.accessibilityLabel = isSavedUser ? "Remove from saved" : "Save user"
+	}
+
 	private func addInfoRow(title: String, value: String) {
 		let container = UserInfoRowView(copyValue: value)
 		container.backgroundColor = .secondarySystemBackground
@@ -249,6 +269,29 @@ final class UserInfoVC: UIViewController {
 	@objc private func handleAvatarLongPress(_ recognizer: UILongPressGestureRecognizer) {
 		guard recognizer.state == .began else { return }
 		saveAvatarImageToPhotos()
+	}
+
+	@objc private func toggleSavedUser() {
+		do {
+			if isSavedUser {
+				try SavedUsersStore.shared.remove(user: user)
+				isSavedUser = false
+				UINotificationFeedbackGenerator().notificationOccurred(.success)
+				showToast(message: "Removed from saved")
+			} else {
+				try SavedUsersStore.shared.save(user: user)
+				isSavedUser = true
+				UINotificationFeedbackGenerator().notificationOccurred(.success)
+				showToast(message: "Saved user")
+			}
+			updateSaveButtonAppearance()
+		} catch SavedUsersStoreError.missingUserIdentifier {
+			UINotificationFeedbackGenerator().notificationOccurred(.error)
+			showToast(message: "Cannot save user without ID")
+		} catch {
+			UINotificationFeedbackGenerator().notificationOccurred(.error)
+			showToast(message: "Failed to update saved user")
+		}
 	}
 
 	private func saveAvatarImageToPhotos() {
