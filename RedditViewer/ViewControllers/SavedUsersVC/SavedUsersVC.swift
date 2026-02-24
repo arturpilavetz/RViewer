@@ -11,7 +11,7 @@ import SnapKit
 final class SavedUsersVC: UIViewController {
 	private let tableView: UITableView = {
 		let tableView = UITableView()
-		tableView.registerClass(TopUserCell.self)
+		tableView.registerClass(UserCell.self)
 		tableView.separatorStyle = .none
 		tableView.rowHeight = UITableView.automaticDimension
 		tableView.estimatedRowHeight = 120
@@ -28,7 +28,18 @@ final class SavedUsersVC: UIViewController {
 		return label
 	}()
 
-	private var users: [UserItemData] = []
+	private let viewModel: SavedUsersViewModel
+	private let userDetailsFactory: (UserItemData) -> UIViewController
+
+	init(viewModel: SavedUsersViewModel, userDetailsFactory: @escaping (UserItemData) -> UIViewController) {
+		self.viewModel = viewModel
+		self.userDetailsFactory = userDetailsFactory
+		super.init(nibName: nil, bundle: nil)
+	}
+
+	required init?(coder: NSCoder) {
+		fatalError("init(coder:) has not been implemented")
+	}
 
 	override func viewDidLoad() {
 		super.viewDidLoad()
@@ -39,12 +50,18 @@ final class SavedUsersVC: UIViewController {
 		tableView.dataSource = self
 		tableView.delegate = self
 
+		viewModel.onDataDidUpdate = { [weak self] in
+			guard let self else { return }
+			self.tableView.reloadData()
+			self.emptyStateLabel.isHidden = self.viewModel.numberOfRows() > 0
+		}
+
 		setUpConstraints()
 	}
 
 	override func viewWillAppear(_ animated: Bool) {
 		super.viewWillAppear(animated)
-		reloadUsers()
+		viewModel.reloadUsers()
 	}
 
 	private func setUpConstraints() {
@@ -59,28 +76,24 @@ final class SavedUsersVC: UIViewController {
 			make.leading.trailing.equalToSuperview().inset(24)
 		}
 	}
-
-	private func reloadUsers() {
-		users = SavedUsersStore.shared.fetchUsers()
-		tableView.reloadData()
-		emptyStateLabel.isHidden = !users.isEmpty
-	}
 }
 
 extension SavedUsersVC: UITableViewDataSource, UITableViewDelegate {
 	func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-		users.count
+		viewModel.numberOfRows()
 	}
 
 	func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-		let cell = tableView.dequeueReusableCell(TopUserCell.self, for: indexPath)
-		cell.setData(user: users[indexPath.row])
+		let cell = tableView.dequeueReusableCell(UserCell.self, for: indexPath)
+		if let user = viewModel.user(at: indexPath.row) {
+			cell.setData(user: user)
+		}
 		return cell
 	}
 
 	func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-		guard indexPath.row >= 0, indexPath.row < users.count else { return }
-		let userInfoVC = UserInfoVC(user: users[indexPath.row])
+		guard let user = viewModel.user(at: indexPath.row) else { return }
+		let userInfoVC = userDetailsFactory(user)
 		navigationController?.pushViewController(userInfoVC, animated: true)
 	}
 
@@ -90,21 +103,8 @@ extension SavedUsersVC: UITableViewDataSource, UITableViewDelegate {
 				completion(false)
 				return
 			}
-			guard indexPath.row >= 0, indexPath.row < self.users.count else {
-				completion(false)
-				return
-			}
 
-			let user = self.users[indexPath.row]
-			do {
-				try SavedUsersStore.shared.remove(user: user)
-				self.users.remove(at: indexPath.row)
-				self.tableView.deleteRows(at: [indexPath], with: .automatic)
-				self.emptyStateLabel.isHidden = !self.users.isEmpty
-				completion(true)
-			} catch {
-				completion(false)
-			}
+			completion(self.viewModel.remove(at: indexPath.row))
 		}
 		deleteAction.backgroundColor = .systemRed
 

@@ -1,5 +1,5 @@
 //
-//  TopUserCell.swift
+//  UserCell.swift
 //  RedditViewer
 //
 //  Created by Artur Pilavetz on 22.02.2026.
@@ -8,7 +8,7 @@
 import UIKit
 import SnapKit
 
-final class TopUserCell: UITableViewCell {
+final class UserCell: UITableViewCell {
 	private let cardView: UIView = {
 		let view = UIView()
 		view.backgroundColor = .secondarySystemBackground

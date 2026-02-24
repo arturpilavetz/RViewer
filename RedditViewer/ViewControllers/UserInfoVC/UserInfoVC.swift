@@ -59,6 +59,7 @@ final class UserInfoVC: UIViewController {
 	private var isSavedUser = false
 
 	private let user: UserItemData
+	private let savedUsersStore: SavedUsersStoring
 	private lazy var saveButtonItem = UIBarButtonItem(
 		image: nil,
 		style: .plain,
@@ -84,8 +85,9 @@ final class UserInfoVC: UIViewController {
 		return label
 	}()
 
-	init(user: UserItemData) {
+	init(user: UserItemData, savedUsersStore: SavedUsersStoring) {
 		self.user = user
+		self.savedUsersStore = savedUsersStore
 		super.init(nibName: nil, bundle: nil)
 	}
 
@@ -204,7 +206,7 @@ final class UserInfoVC: UIViewController {
 	}
 
 	private func refreshSavedState() {
-		isSavedUser = SavedUsersStore.shared.isSaved(user: user)
+		isSavedUser = savedUsersStore.isSaved(user: user)
 		updateSaveButtonAppearance()
 	}
 
@@ -274,12 +276,12 @@ final class UserInfoVC: UIViewController {
 	@objc private func toggleSavedUser() {
 		do {
 			if isSavedUser {
-				try SavedUsersStore.shared.remove(user: user)
+				try savedUsersStore.remove(user: user)
 				isSavedUser = false
 				UINotificationFeedbackGenerator().notificationOccurred(.success)
 				showToast(message: "Removed from saved")
 			} else {
-				try SavedUsersStore.shared.save(user: user)
+				try savedUsersStore.save(user: user)
 				isSavedUser = true
 				UINotificationFeedbackGenerator().notificationOccurred(.success)
 				showToast(message: "Saved user")

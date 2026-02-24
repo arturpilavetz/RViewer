@@ -1,35 +1,35 @@
 //
-//  TopUsersVC.swift
+//  PostsVC.swift
 //  RedditViewer
 //
-//  Created by Artur Pilavetz on 21.02.2026.
+//  Created by Artur Pilavetz on 25.02.2026.
 //
 
 import UIKit
 import SnapKit
 
-final class TopUsersVC: UIViewController {
+final class PostsVC: UIViewController {
 	private let tableView: UITableView = {
 		let tableView = UITableView()
 		[
-			UserCell.self,
+			PostCell.self,
 			LoaderCell.self
 		]
 			.forEach { tableView.registerClass($0) }
 		tableView.separatorStyle = .none
 		tableView.rowHeight = UITableView.automaticDimension
-		tableView.estimatedRowHeight = 120
+		tableView.estimatedRowHeight = 150
 		return tableView
 	}()
 
 	private let refreshControl = UIRefreshControl()
-	private let viewModel: TopUsersViewModel
-	private let userDetailsFactory: (UserItemData) -> UIViewController
+	private let viewModel: PostsViewModel
+	private let postDetailsFactory: (QuestionItemData) -> UIViewController
 	private var isPaginating = false
 
-	init(viewModel: TopUsersViewModel, userDetailsFactory: @escaping (UserItemData) -> UIViewController) {
+	init(viewModel: PostsViewModel, postDetailsFactory: @escaping (QuestionItemData) -> UIViewController) {
 		self.viewModel = viewModel
-		self.userDetailsFactory = userDetailsFactory
+		self.postDetailsFactory = postDetailsFactory
 		super.init(nibName: nil, bundle: nil)
 	}
 
@@ -40,7 +40,7 @@ final class TopUsersVC: UIViewController {
 	override func viewDidLoad() {
 		super.viewDidLoad()
 
-		title = "Top Users"
+		title = "Posts"
 		view.backgroundColor = .systemBackground
 
 		tableView.delegate = self
@@ -93,7 +93,7 @@ final class TopUsersVC: UIViewController {
 	}
 }
 
-extension TopUsersVC: UITableViewDataSource, UITableViewDelegate {
+extension PostsVC: UITableViewDataSource, UITableViewDelegate {
 	func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
 		viewModel.numberOfRows() + 1
 	}
@@ -105,9 +105,9 @@ extension TopUsersVC: UITableViewDataSource, UITableViewDelegate {
 			return cell
 		}
 
-		let cell = tableView.dequeueReusableCell(UserCell.self, for: indexPath)
-		if let user = viewModel.user(at: indexPath.row) {
-			cell.setData(user: user)
+		let cell = tableView.dequeueReusableCell(PostCell.self, for: indexPath)
+		if let post = viewModel.post(at: indexPath.row) {
+			cell.setData(question: post)
 		}
 		return cell
 	}
@@ -121,13 +121,13 @@ extension TopUsersVC: UITableViewDataSource, UITableViewDelegate {
 
 	func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
 		guard indexPath.row < viewModel.numberOfRows() else { return }
-		guard let user = viewModel.user(at: indexPath.row) else { return }
-		let userInfoVC = userDetailsFactory(user)
-		navigationController?.pushViewController(userInfoVC, animated: true)
+		guard let post = viewModel.post(at: indexPath.row) else { return }
+		let detailsVC = postDetailsFactory(post)
+		navigationController?.pushViewController(detailsVC, animated: true)
 	}
 
 	func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
-		guard cell as? UserCell != nil else { return }
+		guard cell as? PostCell != nil else { return }
 		viewModel.loadNextPageIfNeeded(currentIndex: indexPath.row)
 	}
 }

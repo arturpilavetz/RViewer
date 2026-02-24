@@ -1,5 +1,5 @@
 //
-//  TopUserLoaderCell.swift
+//  LoaderCell.swift
 //  RedditViewer
 //
 //  Created by Artur Pilavetz on 23.02.2026.
@@ -8,7 +8,7 @@
 import UIKit
 import SnapKit
 
-final class TopUserLoaderCell: UITableViewCell {
+final class LoaderCell: UITableViewCell {
 	private let activityIndicatorView: UIActivityIndicatorView = {
 		let activityIndicatorView = UIActivityIndicatorView(style: .medium)
 		activityIndicatorView.color = .secondaryLabel

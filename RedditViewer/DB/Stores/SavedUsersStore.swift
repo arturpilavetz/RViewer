@@ -10,7 +10,15 @@ enum SavedUsersStoreError: Error {
 	case missingUserIdentifier
 }
 
-final class SavedUsersStore {
+protocol SavedUsersStoring {
+	func fetchUsers() -> [UserItemData]
+	func isSaved(user: UserItemData) -> Bool
+	func save(user: UserItemData) throws
+	func remove(user: UserItemData) throws
+	func remove(id: String) throws
+}
+
+final class SavedUsersStore: SavedUsersStoring {
 	static let shared = SavedUsersStore()
 
 	private init() { }

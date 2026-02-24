@@ -18,7 +18,7 @@ final class SearchVC: UIViewController {
 
 	private let tableView: UITableView = {
 		let tableView = UITableView()
-		tableView.registerClass(TopUserCell.self)
+		tableView.registerClass(UserCell.self)
 		tableView.separatorStyle = .none
 		tableView.rowHeight = UITableView.automaticDimension
 		tableView.estimatedRowHeight = 120
@@ -36,12 +36,23 @@ final class SearchVC: UIViewController {
 		return label
 	}()
 
-	private var users: [UserItemData] = []
-	private var searchTask: Task<Void, Never>?
+	private let viewModel: SearchViewModel
+	private let userDetailsFactory: (UserItemData) -> UIViewController
+
 	private var debounceTimer: Timer?
 	private var searchBarBottomConstraint: Constraint?
 
 	private let minQueryLength = 2
+
+	init(viewModel: SearchViewModel, userDetailsFactory: @escaping (UserItemData) -> UIViewController) {
+		self.viewModel = viewModel
+		self.userDetailsFactory = userDetailsFactory
+		super.init(nibName: nil, bundle: nil)
+	}
+
+	required init?(coder: NSCoder) {
+		fatalError("init(coder:) has not been implemented")
+	}
 
 	override func viewDidLoad() {
 		super.viewDidLoad()
@@ -53,12 +64,22 @@ final class SearchVC: UIViewController {
 		tableView.dataSource = self
 		tableView.delegate = self
 
+		viewModel.onDataDidUpdate = { [weak self] in
+			self?.tableView.reloadData()
+			self?.updateEmptyState()
+		}
+		viewModel.onError = { [weak self] message in
+			self?.showError(message)
+		}
+
 		setUpConstraints()
 		observeKeyboard()
 	}
 
 	deinit {
 		NotificationCenter.default.removeObserver(self)
+		debounceTimer?.invalidate()
+		viewModel.cancelSearch()
 	}
 
 	private func setUpConstraints() {
@@ -117,8 +138,7 @@ final class SearchVC: UIViewController {
 		let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
 
 		guard query.count >= minQueryLength else {
-			searchTask?.cancel()
-			users.removeAll()
+			viewModel.cancelSearch()
 			tableView.reloadData()
 			emptyStateLabel.text = "Type at least \(minQueryLength) letters"
 			emptyStateLabel.isHidden = false
@@ -126,42 +146,32 @@ final class SearchVC: UIViewController {
 			return
 		}
 
-		searchTask?.cancel()
 		searchBar.setShowsCancelButton(true, animated: true)
 		emptyStateLabel.text = "Searching..."
 		emptyStateLabel.isHidden = false
+		viewModel.search(query: query)
+	}
 
-		searchTask = Task { [weak self] in
-			guard let self else { return }
-			do {
-				let request = try await URLRequest.usersByName(query)
-				let response: StackOverflowTopUsers = try await URLSession.shared.get(request: request)
-				let items = response.users ?? []
-
-				await MainActor.run {
-					self.users = items
-					self.tableView.reloadData()
-					self.emptyStateLabel.text = items.isEmpty ? "No users found" : ""
-					self.emptyStateLabel.isHidden = !items.isEmpty
-				}
-			} catch is CancellationError {
-				return
-			} catch {
-				await MainActor.run {
-					self.users.removeAll()
-					self.tableView.reloadData()
-					self.emptyStateLabel.text = "Failed to load users"
-					self.emptyStateLabel.isHidden = false
-				}
-			}
+	private func updateEmptyState() {
+		if viewModel.numberOfRows() == 0 {
+			emptyStateLabel.text = viewModel.hasQuery ? "No users found" : "Start typing to find users"
+			emptyStateLabel.isHidden = false
+		} else {
+			emptyStateLabel.isHidden = true
 		}
+	}
+
+	private func showError(_ message: String) {
+		let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
+		alert.addAction(UIAlertAction(title: "OK", style: .default))
+		present(alert, animated: true)
 	}
 }
 
 extension SearchVC: UISearchBarDelegate {
 	func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
 		debounceTimer?.invalidate()
-		debounceTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false, block: { [weak self] _ in // 1 sec because API can be blocked for too many requests despite having API token and 10000 requests per day
+		debounceTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false, block: { [weak self] _ in // 1 sec -> API can be blocked for 'too many requests' despite having API token and 10000 requests per day
 			self?.performSearch(query: searchText)
 		})
 	}
@@ -174,12 +184,11 @@ extension SearchVC: UISearchBarDelegate {
 
 	func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
 		debounceTimer?.invalidate()
-		searchTask?.cancel()
+		viewModel.cancelSearch()
 		searchBar.text = nil
 		searchBar.resignFirstResponder()
 		searchBar.setShowsCancelButton(false, animated: true)
 
-		users.removeAll()
 		tableView.reloadData()
 		emptyStateLabel.text = "Start typing to find users"
 		emptyStateLabel.isHidden = false
@@ -188,18 +197,20 @@ extension SearchVC: UISearchBarDelegate {
 
 extension SearchVC: UITableViewDataSource, UITableViewDelegate {
 	func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-		users.count
+		viewModel.numberOfRows()
 	}
 
 	func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-		let cell = tableView.dequeueReusableCell(TopUserCell.self, for: indexPath)
-		cell.setData(user: users[indexPath.row])
+		let cell = tableView.dequeueReusableCell(UserCell.self, for: indexPath)
+		if let user = viewModel.user(at: indexPath.row) {
+			cell.setData(user: user)
+		}
 		return cell
 	}
 
 	func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-		guard indexPath.row >= 0, indexPath.row < users.count else { return }
-		let userInfoVC = UserInfoVC(user: users[indexPath.row])
+		guard let user = viewModel.user(at: indexPath.row) else { return }
+		let userInfoVC = userDetailsFactory(user)
 		navigationController?.pushViewController(userInfoVC, animated: true)
 	}
 }

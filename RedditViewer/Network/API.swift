@@ -19,6 +19,7 @@ private let domain: String = {
 	return "https://api.stackexchange.com/2.3/"
 }()
 private let usersEndpoint = "\(domain)users"
+private let questionsEndpoint = "\(domain)questions"
 private let mockCredentialsURL = URL(string: "https://phxqik.mockapi.dog/")!
 
 private enum AuthStorage {
@@ -32,7 +33,7 @@ private var defaultHeaders: HTTPHeaders {
 		"Accept-Language"   : Locale.current.identifier,
 		"Accept-Encoding"   : "gzip;q=1.0, compress;q=0.5",
 		"Accept"            : "application/json",
-		"Content-Type"		: "application/json"
+		"Content-Type"      : "application/json"
 	]
 }
 
@@ -68,6 +69,28 @@ public extension URLRequest {
 
 	static func usersByName(_ query: String, pageSize: Int = 30) async throws -> URLRequest {
 		try await usersRequest(page: nil, query: query, pageSize: pageSize)
+	}
+
+	static func questions(page: Int, pageSize: Int = 20) async throws -> URLRequest {
+		let apiKey = try await URLRequest.apiKey()
+		let queryItems = [
+			URLQueryItem(name: "order", value: "desc"),
+			URLQueryItem(name: "sort", value: "activity"),
+			URLQueryItem(name: "site", value: "stackoverflow"),
+			URLQueryItem(name: "page", value: String(page)),
+			URLQueryItem(name: "pagesize", value: String(pageSize)),
+			URLQueryItem(name: "filter", value: "withbody"),
+			URLQueryItem(name: "key", value: apiKey)
+		]
+
+		var components = URLComponents(string: questionsEndpoint)
+		components?.queryItems = queryItems
+
+		guard let url = components?.url else {
+			throw HTTPError.generic
+		}
+
+		return URLRequest(url: url)
 	}
 
 	static func apiKey() async throws -> String {
@@ -129,14 +152,12 @@ public extension URLRequest {
 }
 
 private var decoder: JSONDecoder {
-	get {
-		let dateFormatter = DateFormatter()
-		dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
-		dateFormatter.timeZone = TimeZone(abbreviation: "UTC")
-		let decoder = JSONDecoder()
-		decoder.dateDecodingStrategy = .formatted(dateFormatter)
-		return decoder
-	}
+	let dateFormatter = DateFormatter()
+	dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
+	dateFormatter.timeZone = TimeZone(abbreviation: "UTC")
+	let decoder = JSONDecoder()
+	decoder.dateDecodingStrategy = .formatted(dateFormatter)
+	return decoder
 }
 
 extension URLSession {
@@ -153,8 +174,7 @@ extension URLSession {
 		if let httpResponse = response as? HTTPURLResponse,
 		   200 ... 299 ~= httpResponse.statusCode {
 			do {
-				let decoded = try decoder.decode(Response.self, from: data)
-				return decoded
+				return try decoder.decode(Response.self, from: data)
 			} catch {
 				throw HTTPError.parsingError(request.url?.absoluteString ?? "", httpResponse.statusCode, error, String(data: data, encoding: .utf8) ?? "")
 			}
