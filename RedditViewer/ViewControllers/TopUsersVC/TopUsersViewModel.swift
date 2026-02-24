@@ -69,7 +69,7 @@ final class TopUsersViewModel {
 				let session = URLSession(configuration: configuration)
 
 				let page = reset ? 1 : currentPage
-				let request = try URLRequest.usersTopReputation(page: page, pageSize: pageSize)
+				let request = try await URLRequest.usersTopReputation(page: page, pageSize: pageSize)
 				let response: StackOverflowTopUsers = try await session.get(request: request, session: session)
 				let loadedUsers = response.users ?? []
 

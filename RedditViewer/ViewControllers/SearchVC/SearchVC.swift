@@ -38,7 +38,7 @@ final class SearchVC: UIViewController {
 
 	private var users: [UserItemData] = []
 	private var searchTask: Task<Void, Never>?
-	private var debounceWorkItem: DispatchWorkItem?
+	private var debounceTimer: Timer?
 	private var searchBarBottomConstraint: Constraint?
 
 	private let minQueryLength = 2
@@ -134,7 +134,7 @@ final class SearchVC: UIViewController {
 		searchTask = Task { [weak self] in
 			guard let self else { return }
 			do {
-				let request = try URLRequest.usersByName(query)
+				let request = try await URLRequest.usersByName(query)
 				let response: StackOverflowTopUsers = try await URLSession.shared.get(request: request)
 				let items = response.users ?? []
 
@@ -160,22 +160,20 @@ final class SearchVC: UIViewController {
 
 extension SearchVC: UISearchBarDelegate {
 	func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
-		debounceWorkItem?.cancel()
-		let workItem = DispatchWorkItem { [weak self] in
+		debounceTimer?.invalidate()
+		debounceTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false, block: { [weak self] _ in // 1 sec because API can be blocked for too many requests despite having API token and 10000 requests per day
 			self?.performSearch(query: searchText)
-		}
-		debounceWorkItem = workItem
-		DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: workItem)
+		})
 	}
 
 	func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
-		debounceWorkItem?.cancel()
+		debounceTimer?.invalidate()
 		performSearch(query: searchBar.text ?? "")
 		searchBar.resignFirstResponder()
 	}
 
 	func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
-		debounceWorkItem?.cancel()
+		debounceTimer?.invalidate()
 		searchTask?.cancel()
 		searchBar.text = nil
 		searchBar.resignFirstResponder()
