@@ -7,6 +7,7 @@
 
 import UIKit
 import SnapKit
+import Photos
 
 final class UserInfoVC: UIViewController {
 	private let scrollView = UIScrollView()
@@ -54,6 +55,7 @@ final class UserInfoVC: UIViewController {
 	private var imageTask: Task<Void, Never>?
 	private var toastBottomConstraint: Constraint?
 	private var toastHideTask: DispatchWorkItem?
+	private var loadedAvatarImage: UIImage?
 
 	private let user: UserItemData
 
@@ -91,6 +93,7 @@ final class UserInfoVC: UIViewController {
 		title = "User Info"
 
 		setUpConstraints()
+		setUpGestures()
 		loadData()
 		updateColors()
 	}
@@ -165,6 +168,13 @@ final class UserInfoVC: UIViewController {
 		}
 	}
 
+	private func setUpGestures() {
+		avatarImageView.isUserInteractionEnabled = true
+		let avatarLongPress = UILongPressGestureRecognizer(target: self, action: #selector(handleAvatarLongPress(_:)))
+		avatarLongPress.minimumPressDuration = 0.35
+		avatarImageView.addGestureRecognizer(avatarLongPress)
+	}
+
 	private func loadData() {
 		nameLabel.text = user.displayName ?? "Unknown User"
 		repLabel.text = "Reputation: \(UserPresentationFormatter.compactCount(user.reputation ?? 0))"
@@ -233,11 +243,80 @@ final class UserInfoVC: UIViewController {
 
 		UIPasteboard.general.string = row.copyValue
 		UINotificationFeedbackGenerator().notificationOccurred(.success)
-		showCopyToast()
+		showToast(message: "Text copied")
 	}
 
-	private func showCopyToast() {
+	@objc private func handleAvatarLongPress(_ recognizer: UILongPressGestureRecognizer) {
+		guard recognizer.state == .began else { return }
+		saveAvatarImageToPhotos()
+	}
+
+	private func saveAvatarImageToPhotos() {
+		guard let image = loadedAvatarImage else {
+			UINotificationFeedbackGenerator().notificationOccurred(.error)
+			showToast(message: "Image is not loaded yet")
+			return
+		}
+
+		requestPhotoAccessAndSave(image)
+	}
+
+	private func requestPhotoAccessAndSave(_ image: UIImage) {
+		if #available(iOS 14, *) {
+			PHPhotoLibrary.requestAuthorization(for: .addOnly) { [weak self] status in
+				guard let self else { return }
+				switch status {
+					case .authorized, .limited:
+						self.saveImage(image)
+					case .denied, .restricted:
+						DispatchQueue.main.async {
+							UINotificationFeedbackGenerator().notificationOccurred(.error)
+							self.showToast(message: "Allow Photos access in Settings")
+						}
+					case .notDetermined:
+						break
+					@unknown default:
+						DispatchQueue.main.async {
+							UINotificationFeedbackGenerator().notificationOccurred(.error)
+							self.showToast(message: "Photos permission error")
+						}
+				}
+			}
+		} else {
+			PHPhotoLibrary.requestAuthorization { [weak self] status in
+				guard let self else { return }
+				if status == .authorized {
+					self.saveImage(image)
+				} else {
+					DispatchQueue.main.async {
+						UINotificationFeedbackGenerator().notificationOccurred(.error)
+						self.showToast(message: "Allow Photos access in Settings")
+					}
+				}
+			}
+		}
+	}
+
+	private func saveImage(_ image: UIImage) {
+		PHPhotoLibrary.shared().performChanges({
+			PHAssetChangeRequest.creationRequestForAsset(from: image)
+		}) { [weak self] success, _ in
+			DispatchQueue.main.async {
+				guard let self else { return }
+				if success {
+					UINotificationFeedbackGenerator().notificationOccurred(.success)
+					self.showToast(message: "Image saved")
+				} else {
+					UINotificationFeedbackGenerator().notificationOccurred(.error)
+					self.showToast(message: "Failed to save image")
+				}
+			}
+		}
+	}
+
+	private func showToast(message: String) {
 		toastHideTask?.cancel()
+		copyToastLabel.text = message
 		view.layoutIfNeeded()
 		toastBottomConstraint?.update(offset: -16)
 
@@ -260,12 +339,15 @@ final class UserInfoVC: UIViewController {
 	}
 
 	private func loadImage(urlString: String?) {
-		avatarImageView.image = UIImage(systemName: "person.crop.circle")
+		let placeholder = UIImage(systemName: "person.crop.circle")
+		avatarImageView.image = placeholder
+		loadedAvatarImage = nil
 		imageTask = Task {
 			let image = await AvatarImageLoader.shared.image(for: urlString)
 			guard !Task.isCancelled else { return }
 			await MainActor.run {
-				self.avatarImageView.image = image ?? UIImage(systemName: "person.crop.circle")
+				self.loadedAvatarImage = image
+				self.avatarImageView.image = image ?? placeholder
 			}
 		}
 	}

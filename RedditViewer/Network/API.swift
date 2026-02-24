@@ -50,6 +50,24 @@ public extension URLRequest {
 
 		return URLRequest(url: url)
 	}
+
+	static func usersByName(_ query: String, pageSize: Int = 30) throws -> URLRequest {
+		var components = URLComponents(string: "\(domain)users")
+		components?.queryItems = [
+			URLQueryItem(name: "order", value: "desc"),
+			URLQueryItem(name: "sort", value: "reputation"),
+			URLQueryItem(name: "inname", value: query),
+			URLQueryItem(name: "site", value: "stackoverflow"),
+			URLQueryItem(name: "pagesize", value: String(pageSize)),
+			URLQueryItem(name: "key", value: apiKey)
+		]
+
+		guard let url = components?.url else {
+			throw HTTPError.generic
+		}
+
+		return URLRequest(url: url)
+	}
 }
 
 private var decoder: JSONDecoder {
