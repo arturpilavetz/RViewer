@@ -32,11 +32,11 @@ struct CellContainer<T: UITableViewCell> {
 
 	func configure(_ closure: (T) -> ()) -> UITableViewCell {
 		switch constructor() {
-		case .some(let unwrapped):
-			closure(unwrapped)
-			return unwrapped
-		case .none:
-			return UITableViewCell()
+			case .some(let unwrapped):
+				closure(unwrapped)
+				return unwrapped
+			case .none:
+				return UITableViewCell()
 		}
 	}
 }

@@ -5,37 +5,38 @@
 //  Created by Artur Pilavetz on 22.02.2026.
 //
 
-import UIKit
+import Foundation
 
 final class TopUsersViewModel {
-	private var topUsers: [UserItemData] = []
+	private var users: [UserItemData] = []
 	private var currentPage = 1
 	private var hasMore = true
 	private var isLoading = false
 
 	private let nextPageTriggerOffset = 6
 	private let pageSize = 30
+	private let repository: UsersRepository
 
 	var onDataDidUpdate: (() -> Void)?
 	var onRefreshEnded: (() -> Void)?
 	var onPaginationStateChanged: ((Bool) -> Void)?
+	var onError: ((String) -> Void)?
 
-	init() {
+	init(repository: UsersRepository) {
+		self.repository = repository
+	}
+
+	func onViewDidLoad() {
 		getTopUsers(reset: true)
 	}
 
-	deinit {
-		print("TopUsersViewModel deinitialized")
-	}
-
-	func cell(for indexPath: IndexPath, tableView: UITableView) -> UITableViewCell {
-		let cell = tableView.dequeueReusableCell(TopUserCell.self, for: indexPath)
-		cell.setData(user: topUsers[indexPath.row])
-		return cell
-	}
-
 	func numberOfRows() -> Int {
-		topUsers.count
+		users.count
+	}
+
+	func user(at index: Int) -> UserItemData? {
+		guard index >= 0, index < users.count else { return nil }
+		return users[index]
 	}
 
 	func refresh() {
@@ -43,7 +44,7 @@ final class TopUsersViewModel {
 	}
 
 	func loadNextPageIfNeeded(currentIndex: Int) {
-		guard currentIndex >= topUsers.count - nextPageTriggerOffset else { return }
+		guard currentIndex >= users.count - nextPageTriggerOffset else { return }
 		getTopUsers(reset: false)
 	}
 
@@ -58,40 +59,33 @@ final class TopUsersViewModel {
 
 		Task {
 			do {
-				let configuration = URLSessionConfiguration.default
-				configuration.timeoutIntervalForResource = TimeInterval(5)
-				configuration.waitsForConnectivity = true
-				let session = URLSession(configuration: configuration)
-
 				let page = reset ? 1 : currentPage
-				let request = try URLRequest.usersTopReputation(page: page, pageSize: pageSize)
-				let response: StackOverflowTopUsers = try await session.get(request: request, session: session)
+				let response = try await repository.fetchTopUsers(page: page, pageSize: pageSize)
 				let loadedUsers = response.users ?? []
 
 				await MainActor.run {
 					if reset {
-						topUsers = loadedUsers
+						users = loadedUsers
 						currentPage = 2
 					} else {
-						topUsers.append(contentsOf: loadedUsers)
+						users.append(contentsOf: loadedUsers)
 						currentPage += 1
 					}
 
 					hasMore = response.hasMore ?? false
 					isLoading = false
 
-					print("*** \(response.quotaRemaining)")
+					onPaginationStateChanged?(false)
 					onDataDidUpdate?()
 					onRefreshEnded?()
-					onPaginationStateChanged?(false)
 				}
 			} catch {
 				await MainActor.run {
 					isLoading = false
 					onRefreshEnded?()
 					onPaginationStateChanged?(false)
+					onError?("Failed to load users")
 				}
-				print(error)
 			}
 		}
 	}

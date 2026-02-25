@@ -1,5 +1,5 @@
 //
-//  TopUserCell.swift
+//  UserCell.swift
 //  RedditViewer
 //
 //  Created by Artur Pilavetz on 22.02.2026.
@@ -8,12 +8,11 @@
 import UIKit
 import SnapKit
 
-final class TopUserCell: UITableViewCell {
+final class UserCell: UITableViewCell {
 	private let cardView: UIView = {
 		let view = UIView()
 		view.backgroundColor = .secondarySystemBackground
 		view.layer.cornerRadius = 12
-		view.layer.borderColor = UIColor.systemGray5.cgColor
 		view.layer.borderWidth = 1
 		return view
 	}()
@@ -58,12 +57,12 @@ final class TopUserCell: UITableViewCell {
 	}()
 
 	private var imageTask: Task<Void, Never>?
-	private static let imageCache = NSCache<NSString, UIImage>()
 
 	override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
 		super.init(style: style, reuseIdentifier: reuseIdentifier)
 		setConstraints()
 		setUpView()
+		updateColors()
 	}
 
 	required init?(coder: NSCoder) {
@@ -81,13 +80,29 @@ final class TopUserCell: UITableViewCell {
 		badgesLabel.attributedText = nil
 	}
 
+	override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+		super.traitCollectionDidChange(previousTraitCollection)
+		updateColors()
+	}
+
+	private func setUpView() {
+		backgroundColor = .clear
+		selectionStyle = .none
+	}
+
+	private func updateColors() {
+		cardView.layer.borderColor = UIColor.separator.cgColor
+	}
+	
 	private func setConstraints() {
 		contentView.addSubview(cardView)
-		cardView.addSubview(avatarImageView)
-		cardView.addSubview(usernameLabel)
-		cardView.addSubview(reputationLabel)
-		cardView.addSubview(locationLabel)
-		cardView.addSubview(badgesLabel)
+		cardView.addSubviews([
+			avatarImageView,
+			usernameLabel,
+			reputationLabel,
+			locationLabel,
+			badgesLabel
+		])
 
 		cardView.snp.makeConstraints { make in
 			make.edges.equalToSuperview().inset(UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16))
@@ -125,78 +140,22 @@ final class TopUserCell: UITableViewCell {
 		}
 	}
 
-	private func setUpView() {
-		backgroundColor = .clear
-		selectionStyle = .none
-	}
-
 	func setData(user: UserItemData) {
 		usernameLabel.text = user.displayName ?? "Unknown User"
-		reputationLabel.text = "Reputation: \(formattedCount(user.reputation ?? 0))"
+		reputationLabel.text = "Reputation: \(UserPresentationFormatter.compactCount(user.reputation ?? 0))"
 		locationLabel.text = user.location?.isEmpty == false ? user.location : "Location not provided"
-		badgesLabel.attributedText = badgeText(user.badgeCounts)
+		badgesLabel.attributedText = UserPresentationFormatter.badgesText(user.badgeCounts)
 
 		loadImage(urlString: user.profileImage)
 	}
 
-	private func badgeText(_ badges: BadgeCounts?) -> NSAttributedString {
-		let text = NSMutableAttributedString()
-
-		let gold = NSAttributedString(
-			string: "● \(badges?.gold ?? 0)  ",
-			attributes: [.foregroundColor: UIColor.systemYellow]
-		)
-		let silver = NSAttributedString(
-			string: "● \(badges?.silver ?? 0)  ",
-			attributes: [.foregroundColor: UIColor.systemGray]
-		)
-		let bronze = NSAttributedString(
-			string: "● \(badges?.bronze ?? 0)",
-			attributes: [.foregroundColor: UIColor.systemBrown]
-		)
-
-		text.append(gold)
-		text.append(silver)
-		text.append(bronze)
-		return text
-	}
-
-	private func formattedCount(_ value: Int) -> String {
-		if value >= 1_000_000 {
-			return String(format: "%.1fm", Double(value) / 1_000_000.0)
-		}
-		if value >= 1_000 {
-			return String(format: "%.1fk", Double(value) / 1_000.0)
-		}
-		return "\(value)"
-	}
-
 	private func loadImage(urlString: String?) {
-		guard let urlString,
-			  let url = URL(string: urlString) else {
-			avatarImageView.image = UIImage(systemName: "person.crop.circle")
-			return
-		}
-
-		if let cached = Self.imageCache.object(forKey: urlString as NSString) {
-			avatarImageView.image = cached
-			return
-		}
-
 		avatarImageView.image = UIImage(systemName: "person.crop.circle")
 		imageTask = Task {
-			do {
-				let (data, _) = try await URLSession.shared.data(from: url)
-				guard !Task.isCancelled,
-					  let image = UIImage(data: data) else { return }
-
-				Self.imageCache.setObject(image, forKey: urlString as NSString)
-
-				await MainActor.run {
-					self.avatarImageView.image = image
-				}
-			} catch {
-				return
+			let image = await AvatarImageLoader.shared.image(for: urlString)
+			guard !Task.isCancelled else { return }
+			await MainActor.run {
+				self.avatarImageView.image = image ?? UIImage(systemName: "person.crop.circle")
 			}
 		}
 	}
