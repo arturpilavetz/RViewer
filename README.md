@@ -1,4 +1,8 @@
-# RedditViewer
+<p align="center">
+  <img width="150" height="150" alt="Group 2@1x" src="https://github.com/user-attachments/assets/084ac1a1-5247-4c18-9023-e2b266b6357d" />
+</p>
+
+# RViewer - StackOverflow Client for Discovering Developers and Questions
 
 iOS app built for a test assignment.
 
